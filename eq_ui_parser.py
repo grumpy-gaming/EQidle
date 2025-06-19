@@ -18,7 +18,6 @@ EQ_ELEMENT_CLASSES = {
     # Add more as you define them in eq_ui_model.py
     # Example: "InvSlot": EQInvSlot, # You'd need to define EQInvSlot in eq_ui_model.py first
 }
-
 def parse_eq_ui_xml(xml_filepath):
     """
     Parses an EverQuest UI XML file and returns a list of parsed EQ UI objects.
@@ -66,8 +65,6 @@ def parse_eq_ui_xml(xml_filepath):
         import traceback
         traceback.print_exc()
         return []
-
-
 def parse_element_properties(xml_element, eq_object):
     """
     Recursively parses an XML element's attributes and child elements
@@ -177,8 +174,7 @@ def parse_element_properties(xml_element, eq_object):
                         eq_object.decal_size.cx = int(sub_child.text.strip())
                     elif sub_child.tag == "CY" and sub_child.text is not None:
                         eq_object.decal_size.cy = int(sub_child.text.strip())
-
-        # Handle direct text content for elements like <Text>, <ScreenID>, <EQType>
+# Handle direct text content for elements like <Text>, <ScreenID>, <EQType>
         elif child_tag == "Text":
             if hasattr(eq_object, 'text'):
                 eq_object.text = child_xml_element.text.strip() if child_xml_element.text else ""
@@ -276,8 +272,6 @@ def assemble_ui_hierarchy(parsed_elements):
             # Or use spatial relationships for more complex cases.
 
     return windows_by_id, all_elements_by_id
-
-
 if __name__ == "__main__":
     # Use EQUI_Inventory.xml as planned
     inventory_window_path = "F:/THJ/uifiles/default/EQUI_Inventory.xml" # Use your exact path here
