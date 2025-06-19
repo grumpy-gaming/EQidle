@@ -15,9 +15,15 @@ EQ_ELEMENT_CLASSES = {
     "StaticText": EQStaticText,
     "StaticAnimation": EQStaticAnimation,
     "InvSlot": EQInvSlot,
+    "TileLayoutBox": EQTilesLayoutBox,     # ADDED
+    "Listbox": EQListBox,                  # ADDED
+    "STMLbox": EQSTMLbox,                  # ADDED
+    "VerticalLayoutBox": EQVerticalLayoutBox, # ADDED
+    "Page": EQPage,                      # ADDED
+    "TabBox": EQTabBox,                  # ADDED
     # Add more as you define them in eq_ui_model.py
-    # Example: "InvSlot": EQInvSlot, # You'd need to define EQInvSlot in eq_ui_model.py first
 }
+
 def parse_eq_ui_xml(xml_filepath):
     """
     Parses an EverQuest UI XML file and returns a list of parsed EQ UI objects.
@@ -65,6 +71,8 @@ def parse_eq_ui_xml(xml_filepath):
         import traceback
         traceback.print_exc()
         return []
+
+
 def parse_element_properties(xml_element, eq_object):
     """
     Recursively parses an XML element's attributes and child elements
@@ -174,7 +182,8 @@ def parse_element_properties(xml_element, eq_object):
                         eq_object.decal_size.cx = int(sub_child.text.strip())
                     elif sub_child.tag == "CY" and sub_child.text is not None:
                         eq_object.decal_size.cy = int(sub_child.text.strip())
-# Handle direct text content for elements like <Text>, <ScreenID>, <EQType>
+
+        # Handle direct text content for elements like <Text>, <ScreenID>, <EQType>
         elif child_tag == "Text":
             if hasattr(eq_object, 'text'):
                 eq_object.text = child_xml_element.text.strip() if child_xml_element.text else ""
@@ -191,19 +200,51 @@ def parse_element_properties(xml_element, eq_object):
                 except ValueError:
                     print(f"Warning: Could not convert Font value '{child_xml_element.text.strip()}' to int for {eq_object.screen_id}.")
 
-        # Handle list of child pieces (e.g., <Pieces> inside a Window/Screen)
-        elif child_tag == "Pieces":
-            if hasattr(eq_object, "pieces") and isinstance(eq_object.pieces, list):
-                for piece_element in child_xml_element:
-                    piece_eq_class = EQ_ELEMENT_CLASSES.get(piece_element.tag)
-                    if piece_eq_class:
-                        piece_obj = piece_eq_class()
-                        parse_element_properties(piece_element, piece_obj) # Recursive call
-                        eq_object.pieces.append(piece_obj)
-                    else:
-                        print(f"Warning: Unrecognized child piece type '{piece_element.tag}' inside {xml_element.tag} (ID: {eq_object.screen_id}). Skipping.")
+        # Handle list of child pieces (e.g., <Pieces> inside a Window/Screen or Page)
+        # These <Pieces> or <Pages> tags contain REFERENCES to other elements by their ScreenID,
+        # typically in a "TAG:ID" format (e.g., <Pieces>Button:MyButtonID</Pieces>) or just the ID.
+        elif child_tag == "Pieces": # Used by Screen, Page, LayoutBox, TileLayoutBox
+            if hasattr(eq_object, "raw_pieces_references") and isinstance(eq_object.raw_pieces_references, list):
+                # Check if the <Pieces> tag contains text (a ScreenID reference) or nested XML elements
+                if child_xml_element.text and child_xml_element.text.strip():
+                    # If it's a direct text reference (e.g., <Pieces>InvSlot23</Pieces>)
+                    referenced_id = child_xml_element.text.strip()
+                    eq_object.raw_pieces_references.append(referenced_id) # Store the ScreenID reference
+                    print(f"DEBUG: Found direct piece reference '{referenced_id}' for {eq_object.screen_id}.")
+                else:
+                    # If it contains nested XML elements (e.g., <Pieces><Button>...</Button></Pieces>)
+                    # Note: For EQ, <Pieces> usually contains REFERENCES, not nested full element definitions.
+                    # This part might need to be removed/rethought if EQ's XML truly never nests full elements under <Pieces>
+                    for piece_element in child_xml_element: # Loop through actual nested XML elements if they exist
+                        piece_eq_class = EQ_ELEMENT_CLASSES.get(piece_element.tag)
+                        if piece_eq_class:
+                            piece_obj = piece_eq_class()
+                            parse_element_properties(piece_element, piece_obj) # Recursive call
+                            eq_object.pieces.append(piece_obj) # Add actual object
+                            print(f"DEBUG: Found nested XML piece '{piece_obj.screen_id}' for {eq_object.screen_id}.")
+                        else:
+                            print(f"Warning: Unrecognized nested piece type '{piece_element.tag}' inside {xml_element.tag} (ID: {eq_object.screen_id}). Skipping.")
             else:
-                print(f"Warning: '{type(eq_object).__name__}' object (ID: {eq_object.screen_id}) does not support 'Pieces' or 'pieces' attribute is not a list.")
+                print(f"Warning: '{type(eq_object).__name__}' object (ID: {eq_object.screen_id}) does not support 'raw_pieces_references' or 'raw_pieces_references' is not a list. Skipping piece: {child_xml_element.tag}.")
+        elif child_tag == "Pages": # Used by TabBox
+            if hasattr(eq_object, "raw_pages_references") and isinstance(eq_object.raw_pages_references, list):
+                if child_xml_element.text and child_xml_element.text.strip():
+                    referenced_id = child_xml_element.text.strip()
+                    eq_object.raw_pages_references.append(referenced_id)
+                    print(f"DEBUG: Found direct page reference '{referenced_id}' for {eq_object.screen_id}.")
+                else:
+                     for page_element in child_xml_element: # Loop through actual nested XML Page elements if they exist
+                        page_eq_class = EQ_ELEMENT_CLASSES.get(page_element.tag)
+                        if page_eq_class:
+                            page_obj = page_eq_class()
+                            parse_element_properties(page_element, page_obj) # Recursive call
+                            eq_object.pages.append(page_obj) # Add actual object
+                            print(f"DEBUG: Found nested XML page '{page_obj.screen_id}' for {eq_object.screen_id}.")
+                        else:
+                            print(f"Warning: Unrecognized nested page type '{page_element.tag}' inside {xml_element.tag} (ID: {eq_object.screen_id}). Skipping.")
+            else:
+                print(f"Warning: '{type(eq_object).__name__}' object (ID: {eq_object.screen_id}) does not support 'raw_pages_references' or 'raw_pages_references' is not a list. Skipping page: {child_xml_element.tag}.")
+
 
         # Handle other simple direct properties that are children with text content
         elif child_xml_element.text is not None and child_xml_element.text.strip():
@@ -226,86 +267,172 @@ def assemble_ui_hierarchy(parsed_elements):
     """
     Takes a flat list of parsed top-level UI elements and attempts to
     organize them into a hierarchical structure based on common EQ UI patterns.
-    Returns a dictionary mapping top-level Window ScreenIDs to their objects,
-    with child elements populated.
+    Returns:
+        - main_windows (dict): Mapping of Window ScreenIDs to their objects, with
+          their 'pieces' and 'pages' lists populated with actual EQ objects.
+        - all_elements (dict): Flat mapping of all element ScreenIDs to their objects.
+        - unassigned_elements (list): Elements that could not be assigned to a parent.
     """
     windows_by_id = {}
     all_elements_by_id = {}
+    unassigned_elements = []
 
     # First pass: Populate dictionaries for quick lookup
+    # Also, identify all potential container elements (Windows, Pages, TabBoxes, LayoutBoxes)
     for element in parsed_elements:
         if element.screen_id: # Only add if it has a ScreenID
             all_elements_by_id[element.screen_id] = element
-        if isinstance(element, EQWindow):
-            windows_by_id[element.screen_id] = element
+            if isinstance(element, EQWindow):
+                windows_by_id[element.screen_id] = element
+        # Important: Reset pieces/pages to empty lists if they contain string references from initial parsing
+        # We want to populate them with actual objects here
+        if hasattr(element, 'pieces') and all(isinstance(p, str) for p in element.pieces):
+            # This check ensures we only clear and re-populate if they were raw string references
+            # from the initial parse_element_properties step.
+            element.raw_pieces_references = list(element.pieces) # Store a copy of raw references
+            element.pieces = [] # Reset for actual objects
+        if hasattr(element, 'pages') and all(isinstance(p, str) for p in element.pages):
+            element.raw_pages_references = list(element.pages) # Store a copy of raw references
+            element.pages = [] # Reset for actual objects
 
-    # Second pass: Assign children to windows and other parents
+
+    # Second pass: Assign children to parents based on references
+    # This pass will correctly populate 'pieces' and 'pages' lists with actual objects
     for element_id, element_obj in all_elements_by_id.items():
-        if not isinstance(element_obj, EQWindow): # Only process non-window elements
-            # Try to find a parent Window based on ScreenID prefix
-            # Example: 'IW_ReclaimButton' -> 'IW_' might point to 'InventoryWindow'
-            # This is a common but not exhaustive pattern.
-            for window_id, window_obj in windows_by_id.items():
-                # Check for common prefix patterns for window IDs
-                # E.g., InventoryWindow -> IW_Something, CharacterWindow -> CW_Something
-                # Split 'Window' from the ID if it ends with 'Window' for prefix matching
-                window_prefix = window_id
-                if window_id.endswith("Window"):
-                    window_prefix = window_id[:-6] # Remove 'Window'
+        # Handle elements that explicitly define children by reference (e.g., Window, Page, TabBox, LayoutBox)
+        if hasattr(element_obj, 'raw_pieces_references') and element_obj.raw_pieces_references:
+            for ref_str in element_obj.raw_pieces_references:
+                # References can be like "InvSlot0" or "Screen:IW_CharacterView" or "TileLayoutBox:IW_Slots"
+                ref_id = ref_str
+                if ":" in ref_str:
+                    parts = ref_str.split(":")
+                    if len(parts) > 1: # Ensure there is an ID part
+                        ref_id = parts[1] 
+
+                child_obj = all_elements_by_id.get(ref_id)
+                if child_obj:
+                    element_obj.pieces.append(child_obj)
+                    child_obj.parent_id = element_obj.screen_id
+                else:
+                    print(f"Warning: Could not find referenced child '{ref_str}' for parent '{element_id}'. Skipping.")
+        
+        if hasattr(element_obj, 'raw_pages_references') and element_obj.raw_pages_references:
+            for ref_str in element_obj.raw_pages_references:
+                ref_id = ref_str
+                if ":" in ref_str:
+                    parts = ref_str.split(":")
+                    if len(parts) > 1:
+                        ref_id = parts[1]
+
+                child_obj = all_elements_by_id.get(ref_id)
+                if child_obj:
+                    element_obj.pages.append(child_obj)
+                    child_obj.parent_id = element_obj.screen_id
+                else:
+                    print(f"Warning: Could not find referenced page '{ref_str}' for parent '{element_id}'. Skipping.")
+
+    # Third pass: Assign remaining unassigned elements to the main InventoryWindow based on prefix (if applicable)
+    # This is a fallback for elements not explicitly referenced in Pieces/Pages but belong to the main window
+    main_inventory_window = windows_by_id.get("InventoryWindow") # Get the main window after its children were populated
+    if main_inventory_window: # Only proceed if the main inventory window itself was parsed
+        for element_id, element_obj in all_elements_by_id.items():
+            # If element is not a Window/Page/TabBox/LayoutBox itself AND has no parent yet
+            # And its ID starts with "IW_" (common for InventoryWindow children)
+            if not isinstance(element_obj, (EQWindow, EQPage, EQTabBox, EQTilesLayoutBox, EQVerticalLayoutBox)) and \
+               not element_obj.parent_id and \
+               element_id.startswith("IW_"):
                 
-                # Check if element_id starts with the window's prefix + '_'
-                if window_prefix and element_id.startswith(window_prefix + '_'):
-                    # If a match, add to parent's pieces list
-                    window_obj.pieces.append(element_obj)
-                    # Optionally, set a 'parent' attribute on the child for inverse lookup
-                    element_obj.parent_id = window_obj.screen_id # Add parent_id attribute to ScreenPiece in eq_ui_model.py
-                    break # Break after finding a parent to avoid adding to multiple windows
+                # Check if it's already a direct child of a Page or LayoutBox within InventoryWindow
+                # We need to be careful not to re-assign if it's already part of a sub-container
+                is_already_child_of_subcontainer = False
+                # Check direct pieces of main_inventory_window
+                if hasattr(main_inventory_window, 'pieces'):
+                    for piece in main_inventory_window.pieces:
+                        if hasattr(piece, 'screen_id') and piece.screen_id == element_id:
+                            is_already_child_of_subcontainer = True
+                            break
+                        # Also check pieces within nested containers like Pages and LayoutBoxes
+                        if hasattr(piece, 'pieces') and any(hasattr(sub_piece, 'screen_id') and sub_piece.screen_id == element_id for sub_piece in piece.pieces):
+                            is_already_child_of_subcontainer = True
+                            break
+                        if hasattr(piece, 'pages') and any(hasattr(page_in_piece, 'screen_id') and page_in_piece.screen_id == element_id for page_in_piece in piece.pages):
+                            is_already_child_of_subcontainer = True
+                            break
+                # Check direct pages of main_inventory_window
+                if hasattr(main_inventory_window, 'pages') and not is_already_child_of_subcontainer: # Only check if not already found
+                    for page in main_inventory_window.pages:
+                        if hasattr(page, 'screen_id') and page.screen_id == element_id:
+                            is_already_child_of_subcontainer = True
+                            break
+                        if hasattr(page, 'pieces') and any(hasattr(piece_in_page, 'screen_id') and piece_in_page.screen_id == element_id for piece_in_page in page.pieces):
+                            is_already_child_of_subcontainer = True
+                            break
+                        if hasattr(page, 'pages') and any(hasattr(page_in_page, 'screen_id') and page_in_page.screen_id == element_id for page_in_piece in page.pages):
+                            is_already_child_of_subcontainer = True
+                            break
 
 
-                # Additional check for common patterns like "EQUI_" related to main window
-                # if element_id.startswith("EQUI_") and window_id == "MainUIWindow": # Example for a hypothetical MainUIWindow
-                #     window_obj.pieces.append(element_obj)
-                #     element_obj.parent_id = window_obj.screen_id
-                #     break
+                if not is_already_child_of_subcontainer:
+                    main_inventory_window.pieces.append(element_obj)
+                    element_obj.parent_id = main_inventory_window.screen_id
 
-            # Further logic here could look for explicit <Parent> tags/attributes
-            # Or use spatial relationships for more complex cases.
+    # Fourth pass: Identify truly unassigned elements
+    for element in parsed_elements:
+        # An element is unassigned if it has no parent AND it's not a top-level container that we expect to be root (like InventoryWindow, Pages, TabBoxes, LayoutBoxes)
+        if not element.parent_id and element.screen_id and \
+           not isinstance(element, (EQWindow, EQPage, EQTabBox, EQTilesLayoutBox, EQVerticalLayoutBox)):
+            unassigned_elements.append(element)
 
-    return windows_by_id, all_elements_by_id
+    return windows_by_id, all_elements_by_id, unassigned_elements
+
+
 if __name__ == "__main__":
     # Use EQUI_Inventory.xml as planned
-    inventory_window_path = "F:/THJ/uifiles/default/EQUI_Inventory.xml" # Use your exact path here
+    # This path must be EXACTLY correct for your system!
+    inventory_window_path = "F:/THJ/uifiles/default/EQUI_Inventory.xml" 
 
     try:
+        # Step 1: Parse all elements as a flat list
         parsed_ui_elements = parse_eq_ui_xml(inventory_window_path)
 
-        # --- NEW HIERARCHY ASSEMBLY LOGIC ---
+        print("\n--- Raw Parsed Top-Level Elements (before assembly) ---")
         if parsed_ui_elements:
-            print("\n--- Raw Parsed Top-Level Elements ---")
-            # This section prints all elements found directly under the <XML> root
-            for element in parsed_elements:
+            for element in parsed_ui_elements: # Corrected from parsed_elements
                 print(element)
-
-            print("\n--- Attempting UI Hierarchy Assembly ---")
-            # Call the new assembly function to build the logical parent-child relationships
-            main_windows, all_elements = assemble_ui_hierarchy(parsed_elements)
-
-            print(f"\nFound {len(main_windows)} main window(s) with associated children:")
-            # Iterate through the main windows that were identified and populate their children lists
-            for window_id, window_obj in main_windows.items():
-                print(f"Window: {window_obj}")
-                if hasattr(window_obj, 'pieces') and window_obj.pieces: # Check if 'pieces' list is populated
-                    print(f"  It contains {len(window_obj.pieces)} associated pieces:")
-                    # Only print a few children for brevity, or add more logic to filter
-                    for i, piece in enumerate(window_obj.pieces[:20]): # Print first 20 for example
-                        print(f"    - {piece}")
-                    if len(window_obj.pieces) > 20:
-                        print("    ... and more associated children.")
-                else:
-                    print("  It has no directly associated pieces based on current prefix logic.")
-
         else:
-            print("\nNo UI elements were parsed or an error occurred.")
+            print("No top-level elements were parsed initially.")
+
+
+        # Step 2: Assemble the logical hierarchy
+        print("\n--- Attempting UI Hierarchy Assembly ---")
+        main_windows, all_elements_map, unassigned_elements = assemble_ui_hierarchy(parsed_ui_elements)
+
+        print(f"\nFound {len(main_windows)} identified main window(s):")
+        if main_windows:
+            for window_id, window_obj in main_windows.items():
+                print(f"Window: {window_obj.screen_id}")
+                # Print direct children for this window
+                if hasattr(window_obj, 'pieces') and window_obj.pieces:
+                    print(f"  Direct pieces ({len(window_obj.pieces)}):")
+                    for i, piece in enumerate(window_obj.pieces[:20]): # Print first 20 pieces for brevity
+                        print(f"    - {piece.screen_id} (Type: {type(piece).__name__}, Parent: {piece.parent_id})")
+                    if len(window_obj.pieces) > 20: print("      ...")
+                if hasattr(window_obj, 'pages') and window_obj.pages:
+                    print(f"  Direct pages ({len(window_obj.pages)}):")
+                    for i, page in enumerate(window_obj.pages[:5]): # Print first 5 pages for brevity
+                        print(f"    - {page.screen_id} (Type: {type(page).__name__}, Parent: {page.parent_id})")
+                    if len(window_obj.pages) > 5: print("      ...")
+        else:
+            print("No main windows were identified.")
+
+        # Optionally, print unassigned elements
+        if unassigned_elements:
+            print(f"\n--- Unassigned Elements ({len(unassigned_elements)}) ---")
+            for element in unassigned_elements[:10]: # Print first 10 unassigned elements
+                print(f"  - {element.screen_id} (Type: {type(element).__name__})")
+            if len(unassigned_elements) > 10: print("    ...")
+        else:
+            print("\nAll parsed elements were assigned to a parent or are top-level containers.")
 
     except Exception as e:
         print(f"\nAn unhandled error occurred during script execution: {e}")
