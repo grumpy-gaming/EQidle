@@ -43,57 +43,57 @@ def parse_eq_ui_xml(xml_filepath):
                     parsed_elements.append(eq_object)
                 else:
                     print(f"Warning: Unknown top-level element tag '{xml_element.tag}' in {xml_filepath}. Skipping.")
-            elif root.tag in EQ_ELEMENT_CLASSES: # Handle cases where root might directly be a Screen or other element
-                print(f"DEBUG: Root is a recognized UI element: <{root.tag}>") # Debug line
-                eq_class = EQ_ELEMENT_CLASSES.get(root.tag)
-                eq_object = eq_class()
-                parse_element_properties(root, eq_object)
-                parsed_elements.append(eq_object)
-            else:
-                print(f"Error: Unexpected root element '{root.tag}' in {xml_filepath}. Expected 'XML' or a defined UI element.")
+        elif root.tag in EQ_ELEMENT_CLASSES: # Handle cases where root might directly be a Screen or other element
+            print(f"DEBUG: Root is a recognized UI element: <{root.tag}>") # Debug line
+            eq_class = EQ_ELEMENT_CLASSES.get(root.tag)
+            eq_object = eq_class()
+            parse_element_properties(root, eq_object)
+            parsed_elements.append(eq_object)
+        else:
+            print(f"Error: Unexpected root element '{root.tag}' in {xml_filepath}. Expected 'XML' or a defined UI element.")
 
-            print(f"DEBUG: Finished parsing. Found {len(parsed_elements)} top-level elements.") # Debug line
-            return parsed_elements
+        print(f"DEBUG: Finished parsing. Found {len(parsed_elements)} top-level elements.") # Debug line
+        return parsed_elements
 
-        except FileNotFoundError:
-            print(f"Error: File not found: {xml_filepath}")
-            return []
-        except ET.ParseError as e:
-            print(f"Error parsing XML in {xml_filepath}: {e}")
-            return []
-        except Exception as e: # Broader catch for unexpected errors during parsing logic
-            print(f"An unexpected error occurred during XML parsing: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
+    except FileNotFoundError:
+        print(f"Error: File not found: {xml_filepath}")
+        return []
+    except ET.ParseError as e:
+        print(f"Error parsing XML in {xml_filepath}: {e}")
+        return []
+    except Exception as e: # Broader catch for unexpected errors during parsing logic
+        print(f"An unexpected error occurred during XML parsing: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
 
-    def parse_element_properties(xml_element, eq_object):
-        """
-        Recursively parses an XML element's attributes and child elements
-        to populate the corresponding EQ object.
-        """
-        # 1. Handle direct attributes of the XML element (e.g., <Screen ID="MyWindowID">)
-        for attr_name, attr_value in xml_element.attrib.items():
-            if attr_name == "ID": # Special handling for the 'ID' attribute, which maps to screen_id
+def parse_element_properties(xml_element, eq_object):
+    """
+    Recursively parses an XML element's attributes and child elements
+    to populate the corresponding EQ object.
+    """
+    # 1. Handle direct attributes of the XML element (e.g., <Screen ID="MyWindowID">)
+    for attr_name, attr_value in xml_element.attrib.items():
+        if attr_name == "ID": # Special handling for the 'ID' attribute, which maps to screen_id
+            eq_object.screen_id = attr_value
+        elif attr_name == "name": # Sometimes 'name' is used for ScreenID or a descriptive name
+            if hasattr(eq_object, 'screen_id') and eq_object.screen_id is None: # Only if ID wasn't already set
                 eq_object.screen_id = attr_value
-            elif attr_name == "name": # Sometimes 'name' is used for ScreenID or a descriptive name
-                if hasattr(eq_object, 'screen_id') and eq_object.screen_id is None: # Only if ID wasn't already set
-                    eq_object.screen_id = attr_value
-                # Also set 'item' if it matches the class hierarchy
-                if hasattr(eq_object, 'item') and eq_object.item is None:
-                    eq_object.item = attr_value
-            elif hasattr(eq_object, attr_name):
-                # Attempt to convert value based on the default type of the attribute in the EQ object
-                current_attr_value = getattr(eq_object, attr_name)
-                if isinstance(current_attr_value, bool):
-                    setattr(eq_object, attr_name, attr_value.lower() == 'true')
-                elif isinstance(current_attr_value, int):
-                    setattr(eq_object, attr_name, int(attr_value))
-                elif isinstance(current_attr_value, float):
-                    setattr(eq_object, attr_name, float(attr_value))
-                else:
-                    setattr(eq_object, attr_name, attr_value) # Default to string for others
+            # Also set 'item' if it matches the class hierarchy
+            if hasattr(eq_object, 'item') and eq_object.item is None:
+                eq_object.item = attr_value
+        elif hasattr(eq_object, attr_name):
+            # Attempt to convert value based on the default type of the attribute in the EQ object
+            current_attr_value = getattr(eq_object, attr_name)
+            if isinstance(current_attr_value, bool):
+                setattr(eq_object, attr_name, attr_value.lower() == 'true')
+            elif isinstance(current_attr_value, int):
+                setattr(eq_object, attr_name, int(attr_value))
+            elif isinstance(current_attr_value, float):
+                setattr(eq_object, attr_name, float(attr_value))
+            else:
+                setattr(eq_object, attr_name, attr_value) # Default to string for others
 
     # 2. Handle child elements of the XML element
     for child_xml_element in xml_element:
