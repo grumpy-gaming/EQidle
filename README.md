@@ -1,5 +1,7 @@
 # EQidle: Your Quest for the Perfect UI, No Manual XML Grinding Required.
 
+![EQidle Logo](assets/eqidle_logo_main.png)
+
 ## ✨ The Proclamation ✨
 
 Welcome, weary traveler, to the Git repository of **EQidle**! Have you ever stared longingly at your EverQuest UI, wishing for just a *little* less... "ancient parchment chic" and a *little* more "functional masterpiece"? Have you spent countless hours manually tweaking XML, only to accidentally turn your hotbar into a sentient, invisible cube?
